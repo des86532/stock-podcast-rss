@@ -1,0 +1,23 @@
+[project]
+name = "podcast-stock"
+version = "0.1.0"
+description = "Track stock mentions from YouTube podcast transcripts and send Telegram summaries."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "feedparser==6.0.11",
+    "google-genai==1.9.0",
+    "python-dotenv==1.0.1",
+    "requests==2.32.3",
+    "youtube-transcript-api==0.6.3",
+]
+
+[project.scripts]
+podcast-stock = "podcast_stock.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/podcast_stock"]
