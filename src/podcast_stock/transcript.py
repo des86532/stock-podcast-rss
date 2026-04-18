@@ -7,6 +7,8 @@ from youtube_transcript_api._errors import (
     NoTranscriptFound,
 )
 
+from .whisper_transcript import WhisperTranscriptError, transcribe_youtube_video
+
 PREFERRED_LANGUAGES = ("zh-Hant", "zh-TW", "zh-Hans", "zh-CN", "zh")
 
 
@@ -14,7 +16,33 @@ class TranscriptUnavailableError(RuntimeError):
     pass
 
 
-def fetch_transcript_text(video_id: str) -> str:
+def fetch_transcript_text(
+    video_id: str,
+    *,
+    enable_whisper_fallback: bool = False,
+    whisper_model: str = "small",
+    whisper_language: str = "zh",
+) -> str:
+    try:
+        return _fetch_youtube_transcript_text(video_id)
+    except TranscriptUnavailableError as exc:
+        if not enable_whisper_fallback:
+            raise
+
+        try:
+            return transcribe_youtube_video(
+                video_id,
+                model_name=whisper_model,
+                language=whisper_language,
+            )
+        except WhisperTranscriptError as whisper_exc:
+            raise TranscriptUnavailableError(
+                f"YouTube transcript unavailable ({exc}); "
+                f"Whisper fallback unavailable ({whisper_exc})"
+            ) from whisper_exc
+
+
+def _fetch_youtube_transcript_text(video_id: str) -> str:
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
     except CouldNotRetrieveTranscript as exc:
