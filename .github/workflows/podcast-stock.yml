@@ -36,8 +36,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+          YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          MAX_VIDEOS_PER_RUN: ${{ vars.MAX_VIDEOS_PER_RUN || '1' }}
+          ENABLE_WHISPER_FALLBACK: ${{ vars.ENABLE_WHISPER_FALLBACK || 'true' }}
+          WHISPER_MODEL: ${{ vars.WHISPER_MODEL || 'small' }}
+          WHISPER_LANGUAGE: ${{ vars.WHISPER_LANGUAGE || 'zh' }}
+          SAVE_OUTPUTS: ${{ vars.SAVE_OUTPUTS || 'true' }}
+          OUTPUT_DIR: ${{ vars.OUTPUT_DIR || 'runs' }}
         run: uv run podcast-stock
 
       - name: Commit state file

@@ -6,7 +6,7 @@
 
 ## 架構
 
-- Runner：GitHub Actions，每 6 小時檢查一次。
+- Runner：GitHub Actions，每週四與週日 00:00（Asia/Taipei）檢查一次。
 - 來源：YouTube RSS，不需要 YouTube API key。
 - 字幕：優先用 `youtube-transcript-api` 抓取 YouTube 字幕；沒有字幕時可用本機 Whisper fallback 轉錄音訊。
 - LLM：Gemini API，預設 `gemini-2.5-flash`。
@@ -125,18 +125,36 @@ uv run podcast-stock --ignore-state
 
 在 GitHub repository 的 Settings → Secrets and variables → Actions 新增：
 
-Secrets：
+Secrets（必填，敏感資訊）：
 
 - `GEMINI_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
-- `YOUTUBE_CHANNEL_ID`
 
-Variables（可選）：
+Variables（必填，非敏感設定）：
+
+- `YOUTUBE_CHANNEL_ID`：股癌 YouTube channel id，設定為 `UC23rnlQU_qE3cec9x709peA`
+
+Variables（可選，不設定時使用預設值）：
 
 - `GEMINI_MODEL`，預設為 `gemini-2.5-flash`
+- `MAX_VIDEOS_PER_RUN`，預設為 `1`
+- `ENABLE_WHISPER_FALLBACK`，預設為 `true`
+- `WHISPER_MODEL`，預設為 `small`
+- `WHISPER_LANGUAGE`，預設為 `zh`
+- `SAVE_OUTPUTS`，預設為 `true`
+- `OUTPUT_DIR`，預設為 `runs`
 
-Workflow 位於 `.github/workflows/podcast-stock.yml`，會每 6 小時執行，也可以手動 `workflow_dispatch`。
+目前 workflow 排程位於 `.github/workflows/podcast-stock.yml`：
+
+```yaml
+schedule:
+  # GitHub Actions cron uses UTC.
+  # Runs at 00:00 Asia/Taipei on Thursday and Sunday.
+  - cron: "0 16 * * 3,6"
+```
+
+也可以到 GitHub Actions 頁面手動執行 `workflow_dispatch`。
 
 當成功處理新影片後，GitHub Actions 會自動提交更新後的 `processed_videos.json`。
 
