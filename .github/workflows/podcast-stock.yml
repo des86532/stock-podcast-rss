@@ -52,6 +52,7 @@ jobs:
 
       - name: Run tracker
         env:
+          PYTHONUNBUFFERED: "1"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -63,7 +64,9 @@ jobs:
           WHISPER_LANGUAGE: ${{ vars.WHISPER_LANGUAGE || 'zh' }}
           SAVE_OUTPUTS: ${{ vars.SAVE_OUTPUTS || 'true' }}
           OUTPUT_DIR: ${{ vars.OUTPUT_DIR || 'runs' }}
-        run: uv run podcast-stock
+        run: |
+          set -euxo pipefail
+          uv run python -m podcast_stock.main
 
       - name: Commit state file
         uses: stefanzweifel/git-auto-commit-action@v5

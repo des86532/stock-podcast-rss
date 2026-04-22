@@ -27,12 +27,15 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s %(message)s",
+        stream=sys.stdout,
+        force=True,
     )
 
     args = parse_args(argv)
     settings = load_settings()
 
     try:
+        logger.info("Starting podcast stock tracker.")
         if args.summarize_transcript_file:
             _summarize_transcript_file(Path(args.summarize_transcript_file), args, settings)
             return 0
@@ -42,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         videos = _select_videos(args, settings)
+        logger.info("Selected %s video(s) to process.", len(videos))
         if not videos:
             logger.info("No new videos to process.")
             return 0
@@ -175,6 +179,7 @@ def _send_summary_file(summary_path: Path, settings: object) -> None:
 
 def _select_videos(args: argparse.Namespace, settings: object) -> list[Video]:
     if args.video_id:
+        logger.info("Using manually provided video ID: %s", args.video_id)
         return [
             Video(
                 video_id=args.video_id,
@@ -184,8 +189,11 @@ def _select_videos(args: argparse.Namespace, settings: object) -> list[Video]:
             )
         ]
 
+    logger.info("Fetching YouTube RSS feed for channel: %s", settings.youtube_channel_id)
     videos = fetch_latest_videos(settings.youtube_channel_id)
+    logger.info("Fetched %s video(s) from YouTube RSS feed.", len(videos))
     processed_ids = set() if args.ignore_state else load_processed_video_ids(settings.state_file)
+    logger.info("Loaded %s processed video ID(s).", len(processed_ids))
     new_videos = [video for video in videos if video.video_id not in processed_ids]
     return new_videos[: settings.max_videos_per_run]
 
