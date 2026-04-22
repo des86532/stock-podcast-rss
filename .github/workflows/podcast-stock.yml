@@ -3,8 +3,8 @@ name: Podcast Stock Tracker
 on:
   schedule:
     # GitHub Actions cron uses UTC.
-    # Runs at 00:00 Asia/Taipei on Thursday and Sunday.
-    - cron: "0 16 * * 3,6"
+    # Runs at 01:00 Asia/Taipei on Thursday and Sunday.
+    - cron: "0 17 * * 3,6"
   workflow_dispatch:
 
 permissions:
