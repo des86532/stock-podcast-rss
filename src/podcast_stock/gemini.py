@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import logging
+import time
+
 from google import genai
+from google.genai import errors
 from google.genai import types
 
 from .models import Video
+
+logger = logging.getLogger(__name__)
+
+RETRYABLE_GEMINI_STATUS_CODES = {429, 500, 502, 503, 504}
+GEMINI_MAX_ATTEMPTS = 4
+GEMINI_RETRY_DELAYS_SECONDS = (30, 90, 180)
 
 
 def summarize_episode(
@@ -17,13 +27,10 @@ def summarize_episode(
         raise ValueError("GEMINI_API_KEY is required unless --dry-run is used.")
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
+    response = _generate_content_with_retry(
+        client=client,
         model=model,
-        contents=_build_prompt(video, transcript_text),
-        config=types.GenerateContentConfig(
-            temperature=0.2,
-            max_output_tokens=32768,
-        ),
+        prompt=_build_prompt(video, transcript_text),
     )
 
     text = (response.text or "").strip()
@@ -35,6 +42,49 @@ def summarize_episode(
         raise RuntimeError(f"Gemini response did not finish cleanly: {finish_reason}")
 
     return text
+
+
+def _generate_content_with_retry(
+    *,
+    client: genai.Client,
+    model: str,
+    prompt: str,
+) -> object:
+    last_error: errors.APIError | None = None
+
+    for attempt in range(1, GEMINI_MAX_ATTEMPTS + 1):
+        try:
+            return client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=32768,
+                ),
+            )
+        except errors.APIError as exc:
+            last_error = exc
+            status_code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+            if (
+                status_code not in RETRYABLE_GEMINI_STATUS_CODES
+                or attempt >= GEMINI_MAX_ATTEMPTS
+            ):
+                raise
+
+            delay = GEMINI_RETRY_DELAYS_SECONDS[attempt - 1]
+            logger.warning(
+                "Gemini request failed with retryable status %s; retrying in %s seconds "
+                "(attempt %s/%s).",
+                status_code,
+                delay,
+                attempt + 1,
+                GEMINI_MAX_ATTEMPTS,
+            )
+            time.sleep(delay)
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("Gemini request failed before receiving a response.")
 
 
 def _finish_reason(response: object) -> str:
