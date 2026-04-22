@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import requests
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     CouldNotRetrieveTranscript,
@@ -44,7 +45,7 @@ def fetch_transcript_text(
 def _fetch_youtube_transcript_text(video_id: str) -> str:
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-    except CouldNotRetrieveTranscript as exc:
+    except (CouldNotRetrieveTranscript, requests.RequestException) as exc:
         raise TranscriptUnavailableError(str(exc)) from exc
 
     transcript = _find_best_transcript(transcript_list)
@@ -53,7 +54,7 @@ def _fetch_youtube_transcript_text(video_id: str) -> str:
 
     try:
         rows = transcript.fetch()
-    except CouldNotRetrieveTranscript as exc:
+    except (CouldNotRetrieveTranscript, requests.RequestException) as exc:
         raise TranscriptUnavailableError(str(exc)) from exc
 
     text_parts = [row.get("text", "").replace("\n", " ").strip() for row in rows]

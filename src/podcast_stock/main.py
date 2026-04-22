@@ -15,15 +15,27 @@ from .output import (
     save_transcript,
     save_video_metadata,
 )
+from .podcast_feed import PodcastFeedError, fetch_latest_podcast_episodes
 from .state import load_processed_video_ids, mark_video_processed
 from .telegram import send_telegram_message
 from .transcript import TranscriptUnavailableError, fetch_transcript_text
-from .youtube_feed import fetch_latest_videos
+from .whisper_transcript import WhisperTranscriptError, transcribe_audio_url
+from .youtube_feed import (
+    YouTubeApiError,
+    YouTubeFeedError,
+    fetch_latest_videos,
+    fetch_latest_videos_from_api,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s %(message)s",
@@ -189,8 +201,46 @@ def _select_videos(args: argparse.Namespace, settings: object) -> list[Video]:
             )
         ]
 
+    if settings.podcast_rss_url:
+        logger.info("Fetching latest episodes from podcast RSS feed.")
+        try:
+            videos = fetch_latest_podcast_episodes(
+                settings.podcast_rss_url,
+                max_results=min(max(settings.max_videos_per_run * 5, 5), 50),
+            )
+        except PodcastFeedError as exc:
+            logger.warning("Podcast RSS feed is temporarily unavailable: %s", exc)
+        else:
+            logger.info("Fetched %s episode(s) from podcast RSS feed.", len(videos))
+            processed_ids = set() if args.ignore_state else load_processed_video_ids(settings.state_file)
+            logger.info("Loaded %s processed episode ID(s).", len(processed_ids))
+            new_videos = [video for video in videos if video.video_id not in processed_ids]
+            return new_videos[: settings.max_videos_per_run]
+
+    if settings.youtube_api_key:
+        logger.info("Fetching latest videos with YouTube Data API.")
+        try:
+            videos = fetch_latest_videos_from_api(
+                channel_id=settings.youtube_channel_id,
+                api_key=settings.youtube_api_key,
+                max_results=min(max(settings.max_videos_per_run * 5, 5), 50),
+            )
+        except YouTubeApiError as exc:
+            logger.warning("YouTube Data API is temporarily unavailable: %s", exc)
+        else:
+            logger.info("Fetched %s video(s) with YouTube Data API.", len(videos))
+            processed_ids = set() if args.ignore_state else load_processed_video_ids(settings.state_file)
+            logger.info("Loaded %s processed video ID(s).", len(processed_ids))
+            new_videos = [video for video in videos if video.video_id not in processed_ids]
+            return new_videos[: settings.max_videos_per_run]
+
     logger.info("Fetching YouTube RSS feed for channel: %s", settings.youtube_channel_id)
-    videos = fetch_latest_videos(settings.youtube_channel_id)
+    try:
+        videos = fetch_latest_videos(settings.youtube_channel_id)
+    except YouTubeFeedError as exc:
+        logger.warning("YouTube RSS feed is temporarily unavailable: %s", exc)
+        return []
+
     logger.info("Fetched %s video(s) from YouTube RSS feed.", len(videos))
     processed_ids = set() if args.ignore_state else load_processed_video_ids(settings.state_file)
     logger.info("Loaded %s processed video ID(s).", len(processed_ids))
@@ -202,14 +252,28 @@ def _process_video(video: Video, args: argparse.Namespace, settings: object) -> 
     logger.info("Processing video: %s (%s)", video.title, video.video_id)
 
     try:
-        transcript_text = fetch_transcript_text(
-            video.video_id,
-            enable_whisper_fallback=settings.enable_whisper_fallback,
-            whisper_model=settings.whisper_model,
-            whisper_language=settings.whisper_language,
-        )
+        if video.audio_url:
+            if not settings.enable_whisper_fallback:
+                logger.warning("Podcast episode requires Whisper, but ENABLE_WHISPER_FALLBACK is false.")
+                return False
+
+            transcript_text = transcribe_audio_url(
+                video.audio_url,
+                model_name=settings.whisper_model,
+                language=settings.whisper_language,
+            )
+        else:
+            transcript_text = fetch_transcript_text(
+                video.video_id,
+                enable_whisper_fallback=settings.enable_whisper_fallback,
+                whisper_model=settings.whisper_model,
+                whisper_language=settings.whisper_language,
+            )
     except TranscriptUnavailableError as exc:
         logger.warning("Transcript unavailable for %s: %s", video.video_id, exc)
+        return False
+    except WhisperTranscriptError as exc:
+        logger.warning("Podcast audio transcription unavailable for %s: %s", video.video_id, exc)
         return False
 
     if settings.save_outputs:

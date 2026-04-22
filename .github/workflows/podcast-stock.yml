@@ -40,9 +40,15 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+          PODCAST_RSS_URL: ${{ vars.PODCAST_RSS_URL || 'https://feeds.soundon.fm/podcasts/954689a5-3096-43a4-a80b-7810b219cef3.xml' }}
         run: |
+          required=(GEMINI_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID)
+          if [ -z "$PODCAST_RSS_URL" ]; then
+            required+=(YOUTUBE_CHANNEL_ID)
+          fi
+
           missing=0
-          for name in GEMINI_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID YOUTUBE_CHANNEL_ID; do
+          for name in "${required[@]}"; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is not configured in GitHub Actions secrets/variables"
               missing=1
@@ -57,6 +63,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+          PODCAST_RSS_URL: ${{ vars.PODCAST_RSS_URL || 'https://feeds.soundon.fm/podcasts/954689a5-3096-43a4-a80b-7810b219cef3.xml' }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
           MAX_VIDEOS_PER_RUN: ${{ vars.MAX_VIDEOS_PER_RUN || '1' }}
           ENABLE_WHISPER_FALLBACK: ${{ vars.ENABLE_WHISPER_FALLBACK || 'true' }}

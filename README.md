@@ -1,14 +1,14 @@
 # 《股癌》標的追蹤 MVP
 
-這是一個 0 元成本的自動化 MVP：從 YouTube RSS 找新影片，抓 YouTube 自動字幕，用 Gemini Flash 整理節目提到的公司與股票標的，最後推播到 Telegram。
+這是一個低成本的自動化 MVP：從 Podcast RSS 找最新集數，下載音訊後用 Whisper 轉錄，再用 Gemini Flash 整理節目提到的公司與股票標的，最後推播到 Telegram。
 
 > 本專案只做資訊整理，不提供投資建議。
 
 ## 架構
 
 - Runner：GitHub Actions，每週四與週日 00:00（Asia/Taipei）檢查一次。
-- 來源：YouTube RSS，不需要 YouTube API key。
-- 字幕：優先用 `youtube-transcript-api` 抓取 YouTube 字幕；沒有字幕時可用本機 Whisper fallback 轉錄音訊。
+- 來源：優先使用 Podcast RSS 音訊；未設定 Podcast RSS 時 fallback 到 YouTube Data API v3 / YouTube RSS。
+- 轉錄：Podcast RSS 會下載音訊並用本機 Whisper 轉錄；YouTube fallback 則優先抓 YouTube 字幕，沒有字幕時再用 Whisper。
 - LLM：Gemini API，預設 `gemini-2.5-flash`。
 - 推播：Telegram Bot API。
 - 去重：`processed_videos.json` 記錄已處理影片。
@@ -27,12 +27,15 @@ GEMINI_API_KEY=你的 Gemini API key
 TELEGRAM_BOT_TOKEN=你的 Telegram Bot token
 TELEGRAM_CHAT_ID=你的 Telegram chat 或 channel id
 YOUTUBE_CHANNEL_ID=謝孟恭 YouTube channel id
+YOUTUBE_API_KEY=你的 YouTube Data API v3 API key（選填，但建議設定）
+PODCAST_RSS_URL=股癌 SoundOn RSS feed
 ```
 
 股癌 YouTube channel id：
 
 ```bash
 YOUTUBE_CHANNEL_ID=UC23rnlQU_qE3cec9x709peA
+PODCAST_RSS_URL=https://feeds.soundon.fm/podcasts/954689a5-3096-43a4-a80b-7810b219cef3.xml
 ```
 
 若要在 YouTube 沒有字幕時自動用本機 Whisper 轉錄，保留預設設定：
@@ -45,7 +48,7 @@ SAVE_OUTPUTS=true
 OUTPUT_DIR=runs
 ```
 
-Whisper fallback 會下載 YouTube 音訊檔，並用 `faster-whisper` 內部的 PyAV 解碼與轉錄，不需要另外安裝 `ffmpeg`。
+Whisper 會下載 Podcast RSS 或 YouTube fallback 的音訊檔，並用 `faster-whisper` 內部的 PyAV 解碼與轉錄，不需要另外安裝 `ffmpeg`。
 
 程式預設會把每支影片的處理結果留在本地：
 
@@ -59,7 +62,7 @@ runs/
 ```
 
 - `metadata.json`：影片 id、標題、連結、發佈時間、處理時間。
-- `transcript.txt`：完整逐字稿，來源可能是 YouTube 字幕或 Whisper fallback。
+- `transcript.txt`：完整逐字稿，來源可能是 Podcast RSS 音訊、YouTube 字幕或 Whisper fallback。
 - `dry_run_summary.md`：`--dry-run` 時保存的 dry-run 輸出。
 - `summary.md`：正式執行時 Gemini 產生、準備送 Telegram 的摘要。
 
@@ -79,7 +82,7 @@ SAVE_OUTPUTS=false
 
 ## 執行方式
 
-Dry run：只抓 RSS 與字幕，不呼叫 Gemini、不發 Telegram、不更新狀態檔。若影片沒有 YouTube 字幕且 `ENABLE_WHISPER_FALLBACK=true`，會下載音訊並用本機 Whisper 轉錄。
+Dry run：抓 Podcast RSS 與音訊轉錄，不呼叫 Gemini、不發 Telegram、不更新狀態檔。若使用 YouTube fallback 且影片沒有字幕，`ENABLE_WHISPER_FALLBACK=true` 時會下載音訊並用本機 Whisper 轉錄。
 
 ```bash
 uv run podcast-stock --dry-run
@@ -130,13 +133,15 @@ Secrets（必填，敏感資訊）：
 - `GEMINI_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
+- `YOUTUBE_API_KEY`（選填，YouTube fallback 時使用；若未設定會 fallback 到 YouTube RSS）
 
-Variables（必填，非敏感設定）：
+Variables（建議設定，非敏感設定）：
 
-- `YOUTUBE_CHANNEL_ID`：股癌 YouTube channel id，設定為 `UC23rnlQU_qE3cec9x709peA`
+- `PODCAST_RSS_URL`：股癌 Podcast RSS，建議設定為 `https://feeds.soundon.fm/podcasts/954689a5-3096-43a4-a80b-7810b219cef3.xml`
 
 Variables（可選，不設定時使用預設值）：
 
+- `YOUTUBE_CHANNEL_ID`：股癌 YouTube channel id，YouTube fallback 時使用，設定為 `UC23rnlQU_qE3cec9x709peA`
 - `GEMINI_MODEL`，預設為 `gemini-2.5-flash`
 - `MAX_VIDEOS_PER_RUN`，預設為 `1`
 - `ENABLE_WHISPER_FALLBACK`，預設為 `true`

@@ -13,6 +13,8 @@ class Settings:
     telegram_bot_token: str
     telegram_chat_id: str
     youtube_channel_id: str
+    youtube_api_key: str = ""
+    podcast_rss_url: str = ""
     gemini_model: str = "gemini-2.5-flash"
     state_file: Path = Path("processed_videos.json")
     max_videos_per_run: int = 1
@@ -31,6 +33,8 @@ def load_settings() -> Settings:
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         youtube_channel_id=os.getenv("YOUTUBE_CHANNEL_ID", "").strip(),
+        youtube_api_key=os.getenv("YOUTUBE_API_KEY", "").strip(),
+        podcast_rss_url=os.getenv("PODCAST_RSS_URL", "").strip(),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip(),
         state_file=Path(os.getenv("STATE_FILE", "processed_videos.json")),
         max_videos_per_run=_parse_positive_int(os.getenv("MAX_VIDEOS_PER_RUN"), 1),

@@ -9,3 +9,4 @@ class Video:
     title: str
     url: str
     published: str
+    audio_url: str = ""

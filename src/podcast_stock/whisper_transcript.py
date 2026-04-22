@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
+import requests
 import yt_dlp
 from faster_whisper import WhisperModel
 from tqdm import tqdm
@@ -23,6 +25,34 @@ def transcribe_youtube_video(
 ) -> str:
     with tempfile.TemporaryDirectory(prefix="podcast-stock-") as temp_dir:
         audio_path = _download_audio(video_id, Path(temp_dir))
+        logger.info("Transcribing audio with faster-whisper model: %s", model_name)
+
+        try:
+            model = WhisperModel(model_name, device="auto", compute_type="auto")
+            segments, info = model.transcribe(
+                str(audio_path),
+                language=language,
+                vad_filter=True,
+            )
+            text_parts = _collect_segments_with_progress(segments, info.duration)
+        except Exception as exc:
+            raise WhisperTranscriptError(f"Whisper transcription failed: {exc}") from exc
+
+    text = " ".join(text_parts)
+    if not text:
+        raise WhisperTranscriptError("Whisper transcription is empty.")
+
+    return text
+
+
+def transcribe_audio_url(
+    audio_url: str,
+    *,
+    model_name: str,
+    language: str,
+) -> str:
+    with tempfile.TemporaryDirectory(prefix="podcast-stock-") as temp_dir:
+        audio_path = _download_audio_url(audio_url, Path(temp_dir))
         logger.info("Transcribing audio with faster-whisper model: %s", model_name)
 
         try:
@@ -73,6 +103,40 @@ def _download_audio(video_id: str, output_dir: Path) -> Path:
 
     if not audio_path.exists():
         raise WhisperTranscriptError("Downloaded audio file was not found.")
+
+    return audio_path
+
+
+def _download_audio_url(audio_url: str, output_dir: Path) -> Path:
+    logger.info("Downloading podcast audio for Whisper transcription.")
+
+    parsed = urlparse(audio_url)
+    suffix = Path(parsed.path).suffix or ".mp3"
+    audio_path = output_dir / f"episode{suffix}"
+
+    try:
+        with requests.get(audio_url, stream=True, timeout=(20, 120)) as response:
+            response.raise_for_status()
+            total = int(response.headers.get("content-length") or 0)
+
+            with audio_path.open("wb") as audio_file:
+                with tqdm(
+                    total=total or None,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc="Downloading podcast audio",
+                ) as progress_bar:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if not chunk:
+                            continue
+                        audio_file.write(chunk)
+                        progress_bar.update(len(chunk))
+    except requests.RequestException as exc:
+        raise WhisperTranscriptError(f"Failed to download podcast audio: {exc}") from exc
+
+    if not audio_path.exists() or audio_path.stat().st_size == 0:
+        raise WhisperTranscriptError("Downloaded podcast audio file was empty.")
 
     return audio_path
 

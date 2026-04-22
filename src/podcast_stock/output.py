@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from .models import Video
@@ -16,6 +17,7 @@ def save_video_metadata(output_dir: Path, video: Video) -> Path:
         "title": video.title,
         "url": video.url,
         "published": video.published,
+        "audio_url": video.audio_url,
         "processed_at": datetime.now(UTC).isoformat(),
     }
     path = video_dir / "metadata.json"
@@ -56,4 +58,11 @@ def _published_date(published: str) -> str:
     if not published:
         return ""
 
-    return published.split("T", 1)[0].strip()
+    iso_date = published.split("T", 1)[0].strip()
+    if len(iso_date) == 10 and iso_date[4] == "-" and iso_date[7] == "-":
+        return iso_date
+
+    try:
+        return parsedate_to_datetime(published).date().isoformat()
+    except (TypeError, ValueError):
+        return ""
