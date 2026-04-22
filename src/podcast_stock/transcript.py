@@ -3,7 +3,6 @@ from __future__ import annotations
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     CouldNotRetrieveTranscript,
-    NoTranscriptAvailable,
     NoTranscriptFound,
 )
 
@@ -69,7 +68,7 @@ def _find_best_transcript(transcript_list: object) -> object | None:
     for language in PREFERRED_LANGUAGES:
         try:
             return transcript_list.find_transcript([language])
-        except (NoTranscriptFound, NoTranscriptAvailable):
+        except NoTranscriptFound:
             pass
 
     for transcript in transcript_list:

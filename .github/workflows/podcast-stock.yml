@@ -16,20 +16,39 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen
+
+      - name: Smoke test imports
+        run: uv run python -c "import podcast_stock.main"
+
+      - name: Validate required settings
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+        run: |
+          missing=0
+          for name in GEMINI_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID YOUTUBE_CHANNEL_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not configured in GitHub Actions secrets/variables"
+              missing=1
+            fi
+          done
+          exit "$missing"
 
       - name: Run tracker
         env:
@@ -47,7 +66,7 @@ jobs:
         run: uv run podcast-stock
 
       - name: Commit state file
-        uses: stefanzweifel/git-auto-commit-action@v7
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: update processed podcast videos"
           file_pattern: processed_videos.json
