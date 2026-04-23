@@ -38,7 +38,12 @@ def summarize_episode(
         raise RuntimeError("Gemini returned an empty response.")
 
     finish_reason = _finish_reason(response)
-    if finish_reason and finish_reason != "STOP":
+    if finish_reason == "MAX_TOKENS":
+        logger.warning(
+            "Gemini response hit MAX_TOKENS; using truncated summary output for video %s.",
+            video.video_id,
+        )
+    elif finish_reason and finish_reason != "STOP":
         raise RuntimeError(f"Gemini response did not finish cleanly: {finish_reason}")
 
     return text
@@ -139,34 +144,39 @@ def _build_prompt(video: Video, transcript_text: str) -> str:
 影片：{video.url}
 
 ## 投資重點摘要
-- 列出本集所有有資訊量的投資觀點，不要硬壓成三點。
-- 每點要說明主持人的觀點、理由、限制或不確定性。
+- 列出最重要的 5 到 8 點投資觀點，依資訊量排序。
+- 每點限制 1 到 2 句，優先交代主持人的觀點、理由、限制或不確定性。
 
 ## 市場與總經
 - 只列與大盤、利率、通膨、匯率、資金流、景氣循環、政策、風險偏好有關的內容。
+- 最多 5 點，每點 1 句。
 - 若逐字稿沒有相關內容，寫「無明確提及」。
 
 ## 產業與主題
 - 整理 AI、半導體、科技、金融、能源、消費、ETF 或其他投資主題。
+- 最多 5 點，每點 1 句。
 - 若逐字稿沒有相關內容，寫「無明確提及」。
 
 ## 提到的公司與標的
 | 公司/標的 | 股票代號 | 市場 | 態度 | 重點摘要 | 信心 |
 | --- | --- | --- | --- | --- | --- |
 | ... | ... | 台股/美股/其他/待確認 | 偏多/偏空/中立/無明確方向 | ... | 高/中/低 |
+- 最多列 10 筆，每筆重點摘要限制 20 字內。
 
 ## 主持人觀點與語氣
 - 整理主持人對市場方向、風險、部位或交易心態的語氣。
+- 最多 3 點，每點 1 句。
 - 不要寫成投資建議。
 
 ## 逐字稿辨識注意事項
 - 列出可能因自動轉錄造成的專有名詞、股票代號或人名辨識疑點。
+- 最多 5 點，每點 1 句。
 
 規則：
 - 不要捏造股票代號；如果不確定，股票代號填「待確認」。
 - 態度只能使用「偏多」、「偏空」、「中立」、「無明確方向」。
 - 公司與標的只列逐字稿中實際提到或高度明確可辨識者；不要把業配品牌列入標的，除非主持人明確討論其投資價值。
-- 摘要要精簡但完整；如果投資相關內容很多，請充分展開，不要過度壓縮。
+- 摘要要精簡、資訊密度高，總長度以 Telegram 單則訊息可閱讀為優先，避免過度展開。
 - 排除所有業配與無投資關聯內容，不要在輸出中提及贊助商、折扣、產品功效或購買連結。
 - 保留繁體中文。
 
