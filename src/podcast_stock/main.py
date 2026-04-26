@@ -14,6 +14,8 @@ from .output import (
     save_summary,
     save_transcript,
     save_video_metadata,
+    summary_path,
+    transcript_path,
 )
 from .podcast_feed import PodcastFeedError, fetch_latest_podcast_episodes
 from .state import load_processed_video_ids, mark_video_processed
@@ -251,36 +253,51 @@ def _select_videos(args: argparse.Namespace, settings: object) -> list[Video]:
 def _process_video(video: Video, args: argparse.Namespace, settings: object) -> bool:
     logger.info("Processing video: %s (%s)", video.title, video.video_id)
 
-    try:
-        if video.audio_url:
-            if not settings.enable_whisper_fallback:
-                logger.warning("Podcast episode requires Whisper, but ENABLE_WHISPER_FALLBACK is false.")
-                return False
-
-            transcript_text = transcribe_audio_url(
-                video.audio_url,
-                model_name=settings.whisper_model,
-                language=settings.whisper_language,
-            )
+    saved_transcript_path = transcript_path(settings.output_dir, video)
+    transcript_generated = False
+    if settings.save_outputs and saved_transcript_path.exists():
+        transcript_text = saved_transcript_path.read_text(encoding="utf-8").strip()
+        if transcript_text:
+            logger.info("Using saved transcript: %s", saved_transcript_path)
         else:
-            transcript_text = fetch_transcript_text(
-                video.video_id,
-                enable_whisper_fallback=settings.enable_whisper_fallback,
-                whisper_model=settings.whisper_model,
-                whisper_language=settings.whisper_language,
-            )
-    except TranscriptUnavailableError as exc:
-        logger.warning("Transcript unavailable for %s: %s", video.video_id, exc)
-        return False
-    except WhisperTranscriptError as exc:
-        logger.warning("Podcast audio transcription unavailable for %s: %s", video.video_id, exc)
-        return False
+            logger.warning("Saved transcript is empty; regenerating: %s", saved_transcript_path)
+            transcript_text = ""
+    else:
+        transcript_text = ""
 
-    if settings.save_outputs:
+    if not transcript_text:
+        try:
+            if video.audio_url:
+                if not settings.enable_whisper_fallback:
+                    logger.warning("Podcast episode requires Whisper, but ENABLE_WHISPER_FALLBACK is false.")
+                    return False
+
+                transcript_text = transcribe_audio_url(
+                    video.audio_url,
+                    model_name=settings.whisper_model,
+                    language=settings.whisper_language,
+                )
+            else:
+                transcript_text = fetch_transcript_text(
+                    video.video_id,
+                    enable_whisper_fallback=settings.enable_whisper_fallback,
+                    whisper_model=settings.whisper_model,
+                    whisper_language=settings.whisper_language,
+                )
+            transcript_generated = True
+        except TranscriptUnavailableError as exc:
+            logger.warning("Transcript unavailable for %s: %s", video.video_id, exc)
+            return False
+        except WhisperTranscriptError as exc:
+            logger.warning("Podcast audio transcription unavailable for %s: %s", video.video_id, exc)
+            return False
+
+    metadata_path = saved_transcript_path.parent / "metadata.json"
+    if settings.save_outputs and (transcript_generated or not metadata_path.exists()):
         metadata_path = save_video_metadata(settings.output_dir, video)
-        transcript_path = save_transcript(settings.output_dir, video, transcript_text)
+        saved_transcript_path = save_transcript(settings.output_dir, video, transcript_text)
         logger.info("Saved metadata: %s", metadata_path)
-        logger.info("Saved transcript: %s", transcript_path)
+        logger.info("Saved transcript: %s", saved_transcript_path)
 
     if args.dry_run:
         summary = build_dry_run_summary(video, transcript_text)
@@ -290,15 +307,27 @@ def _process_video(video: Video, args: argparse.Namespace, settings: object) -> 
         print(summary)
         return False
 
-    summary = summarize_episode(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
-        video=video,
-        transcript_text=transcript_text,
-    )
-    if settings.save_outputs:
-        summary_path = save_summary(settings.output_dir, video, summary)
-        logger.info("Saved summary: %s", summary_path)
+    saved_summary_path = summary_path(settings.output_dir, video)
+    if settings.save_outputs and saved_summary_path.exists():
+        summary = saved_summary_path.read_text(encoding="utf-8").strip()
+        if summary:
+            logger.info("Using saved summary: %s", saved_summary_path)
+        else:
+            logger.warning("Saved summary is empty; regenerating: %s", saved_summary_path)
+            summary = ""
+    else:
+        summary = ""
+
+    if not summary:
+        summary = summarize_episode(
+            api_key=settings.gemini_api_key,
+            model=settings.gemini_model,
+            video=video,
+            transcript_text=transcript_text,
+        )
+        if settings.save_outputs:
+            saved_summary_path = save_summary(settings.output_dir, video, summary)
+            logger.info("Saved summary: %s", saved_summary_path)
 
     send_telegram_message(
         bot_token=settings.telegram_bot_token,

@@ -76,6 +76,19 @@ jobs:
           set -euxo pipefail
           uv run python -m podcast_stock.main
 
+      - name: Commit run artifacts
+        if: always()
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: save podcast transcripts"
+          file_pattern: runs/**/metadata.json runs/**/transcript.txt
+
+      - name: Commit summaries
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: save podcast summaries"
+          file_pattern: runs/**/summary.md
+
       - name: Commit state file
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

@@ -40,6 +40,14 @@ def save_summary(output_dir: Path, video: Video, summary: str) -> Path:
     return _write_video_text(output_dir, video, "summary.md", summary)
 
 
+def transcript_path(output_dir: Path, video: Video) -> Path:
+    return _video_output_dir(output_dir, video) / "transcript.txt"
+
+
+def summary_path(output_dir: Path, video: Video) -> Path:
+    return _video_output_dir(output_dir, video) / "summary.md"
+
+
 def _write_video_text(output_dir: Path, video: Video, filename: str, text: str) -> Path:
     video_dir = _video_output_dir(output_dir, video)
     video_dir.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 RETRYABLE_GEMINI_STATUS_CODES = {429, 500, 502, 503, 504}
 GEMINI_MAX_ATTEMPTS = 4
 GEMINI_RETRY_DELAYS_SECONDS = (30, 90, 180)
+MAX_TRANSCRIPT_CHARS = 120_000
 
 
 def summarize_episode(
@@ -27,6 +28,7 @@ def summarize_episode(
         raise ValueError("GEMINI_API_KEY is required unless --dry-run is used.")
 
     client = genai.Client(api_key=api_key)
+    transcript_text = _trim_transcript_for_prompt(transcript_text, video.video_id)
     response = _generate_content_with_retry(
         client=client,
         model=model,
@@ -47,6 +49,19 @@ def summarize_episode(
         raise RuntimeError(f"Gemini response did not finish cleanly: {finish_reason}")
 
     return text
+
+
+def _trim_transcript_for_prompt(transcript_text: str, video_id: str) -> str:
+    if len(transcript_text) <= MAX_TRANSCRIPT_CHARS:
+        return transcript_text
+
+    logger.warning(
+        "Transcript for %s is %s characters; trimming to %s characters for Gemini.",
+        video_id,
+        len(transcript_text),
+        MAX_TRANSCRIPT_CHARS,
+    )
+    return transcript_text[:MAX_TRANSCRIPT_CHARS].rstrip()
 
 
 def _generate_content_with_retry(
@@ -176,7 +191,7 @@ def _build_prompt(video: Video, transcript_text: str) -> str:
 - 不要捏造股票代號；如果不確定，股票代號填「待確認」。
 - 態度只能使用「偏多」、「偏空」、「中立」、「無明確方向」。
 - 公司與標的只列逐字稿中實際提到或高度明確可辨識者；不要把業配品牌列入標的，除非主持人明確討論其投資價值。
-- 摘要要精簡、資訊密度高，總長度以 Telegram 單則訊息可閱讀為優先，避免過度展開。
+- 摘要要精簡、資訊密度高，總長度控制在 3500 到 7000 個中文字內，避免過度展開。
 - 排除所有業配與無投資關聯內容，不要在輸出中提及贊助商、折扣、產品功效或購買連結。
 - 保留繁體中文。
 
