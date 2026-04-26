@@ -14,7 +14,7 @@ from .output import (
     save_summary,
     save_transcript,
     save_video_metadata,
-    summary_path,
+    summary_path as get_summary_path,
     transcript_path,
 )
 from .podcast_feed import PodcastFeedError, fetch_latest_podcast_episodes
@@ -307,7 +307,7 @@ def _process_video(video: Video, args: argparse.Namespace, settings: object) -> 
         print(summary)
         return False
 
-    saved_summary_path = summary_path(settings.output_dir, video)
+    saved_summary_path = get_summary_path(settings.output_dir, video)
     if settings.save_outputs and saved_summary_path.exists():
         summary = saved_summary_path.read_text(encoding="utf-8").strip()
         if summary:
